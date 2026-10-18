@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ESP-WebSDR · Doppler</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .duo {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .duo canvas.s {
+        width: 100%;
+        height: 220px;
+        display: block;
+      }
+      .duo canvas.w {
+        width: 100%;
+        height: 260px;
+        display: block;
+      }
+      .readout {
+        font:
+          12.5px/1.45 Consolas,
+          ui-monospace,
+          monospace;
+        color: #8f9ca2;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 18px;
+        padding: 7px 12px 9px;
+      }
+      .readout b {
+        color: #e8eef0;
+      }
+      .pair2 {
+        display: flex;
+        gap: 8px;
+      }
+      .pair2 label {
+        flex: 1;
+      }
+      @media (max-width: 850px) {
+        .duo {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+    <script defer src="serial-transport.js"></script>
+    <script defer src="radio.js"></script>
+    <script defer src="bandplan.js"></script>
+    <script defer src="iqstream.js"></script>
+    <script defer src="dsp.js"></script>
+    <script defer src="panorama.js"></script>
+    <script defer src="doppler-core.js"></script>
+    <script defer src="doppler.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div>
+          <h1>ESP-WebSDR · Doppler</h1>
+          <span
+            ><a href="index.html">burst</a> · <a href="survey.html">panorama</a> · <a href="zoom.html">zoom</a> ·
+            <b>doppler</b> · <a href="csi.html">CSI</a> ·
+            <a href="flash.html" target="_blank" rel="noopener">firmware</a></span
+          >
+        </div>
+      </div>
+      <div class="connection">
+        <span id="light"></span><span id="status">Disconnected</span>
+        <button id="connect">Connect ESP-SDR</button>
+      </div>
+    </header>
+    <main>
+      <aside>
+        <div class="eyebrow">1 · Find the carrier</div>
+        <label>Target <span>MHz</span><input id="target" type="number" step="0.000001" value="2448.000000" /></label>
+        <p class="note">Searches ±125 kHz around the target with a 3.8 Hz-bin FFT and moves the target to the strongest line.</p>
+        <label class="check"><input id="autoTrack" type="checkbox" checked />Start tracking when found</label>
+        <div class="actions"><button id="find" disabled>Find peak</button></div>
+        <p class="note" id="found"></p>
+        <div class="divider"></div>
+        <div class="eyebrow">2 · Doppler search</div>
+        <div class="pair2">
+          <label>Expected max <input id="maxValue" type="number" min="0.1" step="0.1" value="5" /></label>
+          <label
+            >Unit<select id="maxUnit">
+              <option value="ms" selected>m/s</option>
+              <option value="hz">Hz</option>
+            </select></label
+          >
+        </div>
+        <label
+          >Geometry<select id="geometry">
+            <option value="mono" selected>Monostatic (reflection, 2v/λ)</option>
+            <option value="bi">One-way (moving source, v/λ)</option>
+          </select></label
+        >
+        <label>Integration <span>s</span><input id="integration" type="number" min="0.05" max="10" step="0.05" value="1" /></label>
+        <label
+          >Extraction<select id="method">
+            <option value="notch" selected>Carrier notch, PLL-referenced (signed)</option>
+            <option value="lag">Lag self-mix z·z*(t−τ) (unsigned)</option>
+            <option value="envelope">Envelope |z|² (unsigned)</option>
+          </select></label
+        >
+        <label
+          title="Carrier tracking loop and notch width. Keep it well below the slowest Doppler you want, or the loop follows the beat and folds it to the other side."
+          >Carrier tracking <span>Hz</span><input id="trackHz" type="number" min="0.05" max="50" step="0.05" value="1"
+        /></label>
+        <label title="Delay τ for the lag self-mix.">Lag τ <span>ms</span><input id="lag" type="number" min="0.05" max="100" step="0.05" value="1" /></label>
+        <label
+          >Averaging<select id="average">
+            <option value="0">Off</option>
+            <option value="0.5" selected>Short</option>
+            <option value="0.85">Long</option>
+          </select></label
+        >
+        <p class="note" id="derived"></p>
+        <div class="actions"><button id="track" disabled>Track</button><button id="stopBtn" disabled>Stop</button></div>
+        <div class="divider"></div>
+        <label class="check"><input id="agc" type="checkbox" />Hardware AGC</label>
+        <label>Manual gain index<input id="gain" type="number" min="0" max="82" value="54" /></label>
+        <label title="On-chip right shift after decimation; lower is more digital gain.">Digital shift<input id="shift" type="number" min="0" max="7" value="3" /></label>
+      </aside>
+      <section class="display">
+        <div id="error" role="alert" hidden><span id="errorText"></span></div>
+        <div class="chart"><div id="stats" class="readout"></div></div>
+        <div class="duo">
+          <div class="chart">
+            <div class="charthead"><span>Base spectrum around the carrier</span></div>
+            <canvas id="rawSpec" class="s"></canvas>
+            <canvas id="rawWater" class="w"></canvas>
+          </div>
+          <div class="chart">
+            <div class="charthead"><span>Extracted Doppler (carrier at 0 Hz)</span></div>
+            <canvas id="extSpec" class="s"></canvas>
+            <canvas id="extWater" class="w"></canvas>
+          </div>
+        </div>
+        <div id="empty" style="position: static; margin-top: 20px">
+          <h2>Connect an ESP32-S3 running ESP-SDR</h2>
+          <p>
+            Needs a steady carrier: a CW transmitter (another board on the TX profile, a PlutoSDR, a signal generator)
+            whose reflections or motion you want to see. The chip's own 2448 MHz line works for testing the chain.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

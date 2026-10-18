@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ESP-WebSDR · Panorama &amp; survey</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font:
+          12.5px Consolas,
+          ui-monospace,
+          monospace;
+      }
+      th,
+      td {
+        padding: 3px 8px;
+        border-bottom: 1px solid #293135;
+        text-align: left;
+        white-space: nowrap;
+      }
+      th {
+        color: #8f9ca2;
+        font-weight: 600;
+      }
+      tr.spur td {
+        color: #7a8589;
+      }
+      .tablewrap {
+        overflow-x: auto;
+        max-height: 320px;
+      }
+      .pair2 {
+        display: flex;
+        gap: 8px;
+      }
+      .pair2 label {
+        flex: 1;
+      }
+    </style>
+    <script defer src="serial-transport.js"></script>
+    <script defer src="radio.js"></script>
+    <script defer src="bandplan.js"></script>
+    <script defer src="panorama.js"></script>
+    <script defer src="survey.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div>
+          <h1>ESP-WebSDR · Panorama</h1>
+          <span
+            ><a href="index.html">burst</a> · <b>panorama</b> · <a href="zoom.html">zoom</a> ·
+            <a href="doppler.html">doppler</a> · <a href="csi.html">CSI</a> ·
+            <a href="flash.html" target="_blank" rel="noopener">firmware</a></span
+          >
+        </div>
+      </div>
+      <div class="connection">
+        <span id="light"></span><span id="status">Disconnected</span>
+        <button id="connect">Connect ESP-SDR</button>
+      </div>
+    </header>
+    <main>
+      <aside>
+        <div class="pair2">
+          <label>Start <span>MHz</span><input id="start" type="number" min="100" max="6000" value="1850" /></label>
+          <label>Stop <span>MHz</span><input id="stop" type="number" min="100" max="6000" value="2750" /></label>
+        </div>
+        <p class="note">Defaults to where this chip has received a test tone; the PLL may not lock outside it.</p>
+        <label class="check"><input id="agc" type="checkbox" />Hardware AGC (levels vary per window)</label>
+        <label>Manual gain index<input id="gain" type="number" min="0" max="82" value="54" /></label>
+        <label
+          >Sweep averaging<select id="average">
+            <option value="0">Off</option>
+            <option value="0.5">Short</option>
+            <option value="0.7" selected>Medium</option>
+            <option value="0.9">Long</option>
+          </select></label
+        >
+        <div class="actions"><button id="sweep" disabled>Start sweeping</button></div>
+        <p class="note">Last sweep: <b id="sweepTime">—</b></p>
+        <div class="divider"></div>
+        <div class="eyebrow">Survey</div>
+        <label>Detection threshold <span>dB over floor</span><input id="threshold" type="number" min="3" max="40" value="10" /></label>
+        <label
+          >Signals listed<select id="topN">
+            <option>10</option>
+            <option selected>20</option>
+            <option>40</option>
+          </select></label
+        >
+        <label class="check"><input id="showSpurs" type="checkbox" />Show chip spurs</label>
+        <div class="divider"></div>
+        <div class="eyebrow">Display</div>
+        <label
+          >Floor <output id="floorValue">-90 dBFS</output><input id="floor" type="range" min="-140" max="-40" value="-90"
+        /></label>
+        <label
+          >Range <output id="rangeValue">70 dB</output><input id="range" type="range" min="20" max="120" value="70"
+        /></label>
+        <label class="check"><input id="hold" type="checkbox" checked />Max hold (consensus)</label>
+        <label class="check"><input id="bandplan" type="checkbox" checked />Band plan</label>
+      </aside>
+      <section class="display">
+        <div id="error" role="alert" hidden><span id="errorText"></span></div>
+        <div class="chart">
+          <div class="charthead"><span>Stitched spectrum · wheel zoom, drag pan, double-click full span</span><span id="cursor"></span></div>
+          <canvas id="spectrum"></canvas>
+        </div>
+        <div class="chart waterfall">
+          <div class="charthead"><span>Sweep history</span></div>
+          <canvas id="waterfall"></canvas>
+          <div id="empty">
+            <div class="empty-icon">▥</div>
+            <h2>Connect ESP-SDR to start</h2>
+          </div>
+        </div>
+        <div class="chart">
+          <div class="charthead"><span>Strongest signals (chip spurs and LO artifacts excluded)</span></div>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr><th>#</th><th>MHz</th><th>dBFS</th><th>SNR dB</th><th>width kHz</th><th>activity</th><th>seen</th><th>identity</th><th>open</th></tr>
+              </thead>
+              <tbody id="peaks"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

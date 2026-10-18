@@ -23,6 +23,9 @@ jobs:
             index.html
             flash.html
             zoom.html
+            survey.html
+            doppler.html
+            csi.html
             *.js
             *.css
             espargos-logo.svg

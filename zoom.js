@@ -26,6 +26,9 @@ const settings = {
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
 } catch (e) {}
+// Links from the survey table open a signal directly: zoom.html?f=<MHz>.
+const linked = Number(new URLSearchParams(location.search).get('f'));
+if (linked > 0) settings.centerHz = Math.round(linked * 1e6);
 function save() {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
