@@ -26,6 +26,7 @@ jobs:
             survey.html
             doppler.html
             csi.html
+            tx.html
             *.js
             *.css
             espargos-logo.svg

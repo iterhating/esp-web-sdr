@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ESP-WebSDR · Transmit</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      #preview {
+        width: 100%;
+        height: 260px;
+        display: block;
+      }
+      .warn {
+        background: #3d2416;
+        border: 1px solid #a0632a;
+        color: #f1c88a;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .warn b {
+        color: #ffd79a;
+      }
+      #transmit {
+        background: #c94a37;
+        border-color: #c94a37;
+        color: #fff;
+        font-weight: 700;
+      }
+      #transmit:disabled {
+        background: #3a3a3a;
+        border-color: #3a3a3a;
+        color: #888;
+      }
+      .pair2 {
+        display: flex;
+        gap: 8px;
+      }
+      .pair2 label {
+        flex: 1;
+      }
+    </style>
+    <script defer src="serial-transport.js"></script>
+    <script defer src="radio.js"></script>
+    <script defer src="bandplan.js"></script>
+    <script defer src="txgen.js"></script>
+    <script defer src="txradio.js"></script>
+    <script defer src="tx.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div>
+          <h1>ESP-WebSDR · Transmit</h1>
+          <span
+            ><a href="index.html">burst</a> · <a href="survey.html">panorama</a> · <a href="zoom.html">zoom</a> ·
+            <a href="doppler.html">doppler</a> · <a href="csi.html">CSI</a> · <b>TX</b> ·
+            <a href="flash.html" target="_blank" rel="noopener">firmware</a></span
+          >
+        </div>
+      </div>
+      <div class="connection">
+        <span id="light"></span><span id="status">Disconnected</span>
+        <button id="connect">Connect ESP-SDR</button>
+      </div>
+    </header>
+    <main>
+      <aside>
+        <label
+          >Waveform<select id="type">
+            <option value="cw" selected>CW carrier</option>
+            <option value="tone">Single tone (offset)</option>
+            <option value="twotone">Two-tone (intermod)</option>
+            <option value="chirp">Linear chirp</option>
+            <option value="noise">Band-limited noise</option>
+            <option value="qpsk">QPSK (random)</option>
+          </select></label
+        >
+        <label>Center frequency <span>MHz</span><input id="freq" type="number" min="1800" max="2800" step="1" value="2450" /></label>
+        <label id="p1row" hidden><span id="p1label">Offset (MHz)</span><input id="p1" type="number" step="0.1" value="2" /></label>
+        <label id="p2row" hidden><span id="p2label">Tone 2 (MHz)</span><input id="p2" type="number" step="0.1" value="2" /></label>
+        <label
+          >TX sample rate<select id="rate">
+            <option value="40000000" selected>40 MS/s</option>
+            <option value="80000000">80 MS/s</option>
+          </select></label
+        >
+        <label>Amplitude <output id="ampValue">70 %</output><input id="amp" type="range" min="5" max="100" value="70" /></label>
+        <label title="RF stops automatically after this many seconds, even if the tab is left open.">Auto-stop after <span>s</span><input id="maxDuration" type="number" min="1" max="120" value="20" /></label>
+        <div class="divider"></div>
+        <label class="check"
+          ><input id="ack" type="checkbox" />I am authorized to transmit here and will keep power low</label
+        >
+        <div class="actions"><button id="transmit" disabled>Transmit</button><button id="stopTx" disabled>Stop</button></div>
+        <p class="note">Elapsed: <b id="elapsed">—</b></p>
+      </aside>
+      <section class="display">
+        <div class="warn">
+          <b>Real RF.</b> This keys the ESP's 2.4 GHz radio over the air. Output power is uncalibrated and harmonics
+          are unmeasured. Transmit only into a shielded enclosure or at minimal power, stay within a band you may use
+          (2.4 GHz ISM, or the 13 cm amateur band if licensed), and never transmit on frequencies you are not
+          authorized to use. These are generic test waveforms; the arbitrary-waveform path is unverified on the S3.
+        </div>
+        <div id="error" role="alert" hidden><span id="errorText"></span></div>
+        <div class="chart">
+          <div class="charthead"><span>Waveform preview (baseband spectrum, centered on the carrier)</span></div>
+          <canvas id="preview"></canvas>
+        </div>
+        <div class="chart" style="padding: 10px 12px">
+          <p class="note" style="margin: 0">
+            To confirm it radiates: open <a href="survey.html">panorama</a> or <a href="zoom.html">zoom</a> on a
+            <em>second</em> ESP32-S3 (or a PlutoSDR) and look for the signal, or run the Bluetooth interference check
+            (calibration/tx_verify_ble.py). CW is the most reliable emission; use it for Doppler illumination.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

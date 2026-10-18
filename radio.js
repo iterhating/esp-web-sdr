@@ -589,6 +589,11 @@ class BurstSerialRadio {
     this.hasSpecN = has('SPECN');
     this.hasSpecStats = has('SPECSTAT');
     this.hasHardwareAgc = has('HWAGC');
+    // Raw capability list and transmit flags (the zhouzhiwen2000 fork adds TX).
+    this.caps = caps.split(' ').slice(1);
+    this.hasTx = has('TX');
+    this.hasReplay = has('REPLAY');
+    this.hasCw = has('CW');
     await this.negotiateLimits(has('RXLIMITS'));
     await this.negotiateVersion(caps);
     await this.negotiateGpio(caps);
