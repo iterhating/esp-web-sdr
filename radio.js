@@ -594,6 +594,7 @@ class BurstSerialRadio {
     this.hasTx = has('TX');
     this.hasReplay = has('REPLAY');
     this.hasCw = has('CW');
+    this.hasStream = has('RING'); // continuous decimated I/Q (IQS), for zoom/Doppler
     await this.negotiateLimits(has('RXLIMITS'));
     await this.negotiateVersion(caps);
     await this.negotiateGpio(caps);

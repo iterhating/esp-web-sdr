@@ -385,6 +385,8 @@ async function connect(port = null) {
     await radio.connect({ port });
     if (radio.family !== 'S3')
       throw Error(`Continuous I/Q needs an ESP32-S3 on native USB; this board is ${radio.deviceName || 'unknown'}.`);
+    if (!radio.hasStream)
+      throw Error('This firmware cannot stream continuous I/Q. Flash the stock "ESP32-S3" profile (the transmit profile does not support zoom or Doppler).');
     connected = true;
     paused = false;
     configureDemod();

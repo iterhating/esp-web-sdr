@@ -37,6 +37,8 @@ async function connect(port = null) {
   try {
     await radio.connect({ port });
     if (radio.family !== 'S3') throw Error('Doppler needs the continuous I/Q stream of an ESP32-S3.');
+    if (!radio.hasStream)
+      throw Error('This firmware cannot stream continuous I/Q. Flash the stock "ESP32-S3" profile (the transmit profile does not support Doppler).');
     connected = true;
   } catch (e) {
     connected = false;

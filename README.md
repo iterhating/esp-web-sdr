@@ -21,16 +21,24 @@ firmware, but haven't reviewed every line of ESP-WebSDR by hand.
 
 ## This fork: zoom, demodulation, CSI and firmware modes
 
-| Page | Firmware profile | What it does |
-| --- | --- | --- |
-| `index.html` | ESP-SDR (any chip) | Burst spectrum and waterfall, plus a band-plan overlay (Wi-Fi, BLE advertising, known chip spurs), crystal ppm correction and a rate-matched analog filter |
-| `zoom.html` | ESP-SDR on an ESP32-S3 | Continuous I/Q (15.6–250 kS/s): FFTs to 65536 points (0.48 Hz RBW), hertz tuning, AM/NFM/WFM/USB/LSB/CW audio, SigMF recording |
-| `csi.html` | `esp32s3-csi` | Wi-Fi CSI: amplitude heatmap, sanitized phase, sources heard, motion index and an amplitude-fluctuation (Doppler-like) spectrum; a second board can run as illuminator |
+One board does one job at a time; each page needs a matching firmware
+profile (flash it from `flash.html`), and a page warns you when the loaded
+firmware can't do what it needs.
 
-Switch a board between modes with the firmware installer: the S3 profiles are
-the stock receiver (`esp32s3`), the receiver with the zhouzhiwen2000 fork's
-experimental transmit commands (`esp32s3-tx`, unverified on air) and the CSI
-sensor (`esp32s3-csi`, source in `csi-firmware/`). `tools/add_firmware_profile.py`
+| Page | Needs firmware | What it does |
+| --- | --- | --- |
+| `index.html` | stock `esp32s3` (or any chip) | Burst spectrum and waterfall, band-plan overlay (Wi-Fi, BLE advertising, known chip spurs), crystal ppm correction, rate-matched analog filter |
+| `survey.html` | stock `esp32s3` (burst) | Sweeps everything the chip reaches (~1850–2750 MHz), stitches overlapping windows to reject LO leakage and images, ranks the strongest signals with chip spurs flagged |
+| `zoom.html` | stock `esp32s3` (continuous I/Q) | Continuous I/Q (15.6–250 kS/s): FFTs to 65536 points (0.48 Hz RBW), hertz tuning, AM/NFM/WFM/USB/LSB/CW audio, SigMF recording |
+| `doppler.html` | stock `esp32s3` (continuous I/Q) | Locks a carrier and extracts signed Doppler (PLL notch), lag self-mix or envelope, with Hz / m/s axes; needs a steady carrier (CW illuminator or Pluto) |
+| `csi.html` | `esp32s3-csi` | Wi-Fi CSI: amplitude heatmap, sanitized phase, sources heard, and motion detection (learn the empty room, then Motion/Still with a score trace) |
+| `tx.html` | `esp32s3-tx` | Transmit CW or test waveforms (tone, two-tone, chirp, noise, QPSK) with a lease keepalive, preview and safety guardrails |
+
+S3 firmware profiles: the stock receiver (`esp32s3`, full RX incl. continuous
+I/Q — the default for most pages), the CSI sensor (`esp32s3-csi`, source in
+`csi-firmware/`), and the zhouzhiwen2000 fork with experimental transmit
+(`esp32s3-tx`, burst RX + TX/CW/REPLAY, but no continuous-I/Q stream, so not
+zoom/Doppler; transmit is unverified on air). `tools/add_firmware_profile.py`
 adds any ESP-IDF build as a further profile. Receiver calibration tools and
 measurements are in `calibration/`.
 
