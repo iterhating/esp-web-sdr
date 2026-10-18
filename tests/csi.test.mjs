@@ -42,6 +42,36 @@ test('LLTF sub-carriers come out ordered -32..31 with amplitude and phase', () =
   assert.equal(phase[32 + 5], 0);
 });
 
+test('motion detector learns a still baseline, flags motion and releases with hysteresis', () => {
+  const det = vm.runInContext('new MotionDetector({ windowS: 1, threshold: 2.5, release: 1.6, holdS: 1 })', ctx);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5);
+  // 20 packets/s; a fixed multipath profile with small noise, or with a
+  // moving reflector modulating part of the profile.
+  const packet = (t, moving, gain) =>
+    Float32Array.from({ length: 64 }, (_, i) => {
+      const s = i - 32,
+        base = 40 + 15 * Math.cos(0.35 * s),
+        move = moving ? 10 * Math.cos(0.2 * s + 2 * Math.PI * 1.3 * t) : 0;
+      return gain * (base + move + 0.4 * rnd());
+    });
+  const events = [];
+  det.calibrate(0, 5);
+  for (let n = 0; n < 20 * 30; n++) {
+    const t = n / 20,
+      moving = t >= 10 && t < 18,
+      gain = n % 50 < 25 ? 1 : 1.6; // AGC steps must not look like motion
+    const e = det.push(packet(t, moving, gain), t);
+    if (e) events.push({ ...e });
+  }
+  assert.equal(events[0].type, 'calibrated');
+  const motion = events.find((e) => e.type === 'motion'),
+    still = events.find((e) => e.type === 'still');
+  assert.ok(motion && motion.t >= 10 && motion.t < 11.5, `motion at ${motion?.t}`);
+  assert.ok(still && still.t > 18 && still.t < 21.5, `still at ${still?.t}`);
+  assert.equal(events.filter((e) => e.type === 'motion').length, 1, 'no false triggers from gain steps');
+});
+
 test('phase sanitizing removes the per-packet timing slope and offset', () => {
   // Pure linear phase across sub-carriers (timing offset) plus a constant.
   const rec = parseCsiLine(line((s) => [60 * Math.cos(0.3 * s + 1), 60 * Math.sin(0.3 * s + 1)]));

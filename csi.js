@@ -72,6 +72,86 @@ function sanitizePhase(phase) {
   return out;
 }
 
+// Motion detector on CSI amplitude. Each packet's LLTF amplitudes are
+// normalised by their mean (removing AGC and transmit-power changes); the
+// statistic is the mean over sub-carriers of each one's standard deviation
+// across a sliding window. A still room gives a low, steady value; people
+// moving through the multipath field raise it. The score is that statistic
+// divided by the baseline learned while the room was empty.
+class MotionDetector {
+  constructor({ windowS = 1.5, threshold = 2.5, release = 1.6, holdS = 2 } = {}) {
+    this.windowS = windowS;
+    this.threshold = threshold;
+    this.release = release;
+    this.holdS = holdS;
+    this.frames = [];
+    this.baseline = null;
+    this.learning = null;
+    this.state = 'still';
+    this.lastAbove = -Infinity;
+    this.score = 0;
+  }
+  // amp: Float32Array(64) ordered -32..31; t in seconds. Returns an event or null.
+  push(amp, t) {
+    let mean = 0;
+    for (const s of LLTF_VALID) mean += amp[s + 32];
+    mean /= LLTF_VALID.length;
+    if (!(mean > 0)) return null;
+    this.frames.push({ t, v: LLTF_VALID.map((s) => amp[s + 32] / mean) });
+    while (this.frames.length > 2 && t - this.frames[0].t > this.windowS) this.frames.shift();
+    if (this.frames.length < 5) return null;
+    const stat = this.statistic();
+    if (this.learning) {
+      this.learning.values.push(stat);
+      if (t - this.learning.start >= this.learning.duration) {
+        const v = this.learning.values.sort((a, b) => a - b);
+        this.baseline = v[Math.floor(v.length / 2)];
+        this.learning = null;
+        return { type: 'calibrated', baseline: this.baseline };
+      }
+      return null;
+    }
+    if (!this.baseline) return null;
+    this.score = stat / this.baseline;
+    if (this.score >= this.threshold) this.lastAbove = t;
+    if (this.state === 'still' && this.score >= this.threshold) {
+      this.state = 'motion';
+      return { type: 'motion', t, score: this.score };
+    }
+    if (this.state === 'motion' && this.score < this.release && t - this.lastAbove >= this.holdS) {
+      this.state = 'still';
+      return { type: 'still', t, score: this.score };
+    }
+    return null;
+  }
+  statistic() {
+    const n = this.frames.length,
+      k = this.frames[0].v.length;
+    let total = 0;
+    for (let j = 0; j < k; j++) {
+      let s = 0,
+        ss = 0;
+      for (const f of this.frames) {
+        s += f.v[j];
+        ss += f.v[j] * f.v[j];
+      }
+      total += Math.sqrt(Math.max(0, ss / n - (s / n) ** 2));
+    }
+    return total / k;
+  }
+  // Learn the empty-room baseline over the next `duration` seconds.
+  calibrate(t, duration = 10) {
+    this.learning = { start: t, duration, values: [] };
+    this.state = 'still';
+  }
+  reset() {
+    this.frames = [];
+    this.learning = null;
+    this.state = 'still';
+    this.score = 0;
+  }
+}
+
 // ---- page -----------------------------------------------------------------------
 if (typeof document !== 'undefined') {
   const $ = (id) => document.getElementById(id);
@@ -84,11 +164,16 @@ if (typeof document !== 'undefined') {
     connected = false;
   const sources = new Map();
   let selected = null,
+    pinned = false,
     last = null,
     heat = [],
     motion = [],
     baseline = null,
     series = [];
+  const detector = new MotionDetector(),
+    scores = [],
+    log = [];
+  let audioCtx = null;
 
   const status = (s) => ($('status').textContent = s);
   const error = (e) => {
@@ -175,10 +260,22 @@ if (typeof document !== 'undefined') {
     s.sigMode = rec.sigMode;
     s.times.push(now);
     while (s.times.length && now - s.times[0] > 2000) s.times.shift();
-    if (!selected) selected = rec.mac;
+    // Follow the busiest transmitter until the user picks one: a steady,
+    // frequent source gives the detector the most samples.
+    if (!pinned) {
+      const busiest = [...sources.values()].sort((a, b) => b.times.length - a.times.length)[0];
+      if (busiest && busiest.mac !== selected && (!sources.get(selected) || busiest.times.length > 1.5 * sources.get(selected).times.length))
+        selectSource(busiest.mac);
+    }
     if (rec.mac !== selected) return;
     const { amp, phase } = lltf(rec);
     last = { amp, phase: sanitizePhase(phase), rec };
+    const ev = detector.push(amp, now / 1000);
+    if (detector.baseline) {
+      scores.push({ t: now / 1000, s: detector.score });
+      while (scores.length && now / 1000 - scores[0].t > 60) scores.shift();
+    }
+    if (ev) motionEvent(ev);
     heat.unshift(amp);
     if (heat.length > HEAT_ROWS) heat.pop();
     // Motion index: mean relative deviation from a slow per-sub-carrier baseline.
@@ -322,16 +419,105 @@ if (typeof document !== 'undefined') {
       )
       .join('');
   }
-  $('sources').onclick = (e) => {
-    const tr = e.target.closest('tr');
-    if (!tr) return;
-    selected = tr.dataset.mac;
+  function selectSource(mac) {
+    selected = mac;
     heat = [];
     motion = [];
     series = [];
     baseline = null;
+    scores.length = 0;
+    detector.reset();
+    detector.baseline = null;
+    $('motionState').textContent = 'Learn the empty room to arm';
+    $('motionState').className = 'state';
+  }
+  $('sources').onclick = (e) => {
+    const tr = e.target.closest('tr');
+    if (!tr) return;
+    pinned = true;
+    selectSource(tr.dataset.mac);
   };
+
+  // ---- motion detection panel ---------------------------------------------------------
+  function beep() {
+    if (!$('beep').checked) return;
+    audioCtx ||= new AudioContext();
+    const o = audioCtx.createOscillator(),
+      g = audioCtx.createGain();
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+    o.connect(g).connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + 0.25);
+  }
+  function motionEvent(ev) {
+    const time = new Date().toLocaleTimeString();
+    if (ev.type === 'calibrated') {
+      $('motionState').textContent = 'Still';
+      $('motionState').className = 'state still';
+      log.unshift(`${time} · armed (baseline ${ev.baseline.toFixed(4)})`);
+    } else if (ev.type === 'motion') {
+      $('motionState').textContent = 'Motion';
+      $('motionState').className = 'state motion';
+      log.unshift(`${time} · motion (score ${ev.score.toFixed(1)})`);
+      beep();
+    } else {
+      $('motionState').textContent = 'Still';
+      $('motionState').className = 'state still';
+      log.unshift(`${time} · still`);
+    }
+    log.length = Math.min(log.length, 50);
+    $('motionLog').innerHTML = log.map((l) => `<li>${l}</li>`).join('');
+  }
+  $('learn').onclick = () => {
+    if (!selected) return error('No CSI yet: press Start and wait for a source.');
+    detector.calibrate(performance.now() / 1000, Number($('learnS').value));
+    $('motionState').textContent = `Learning… keep the room empty and still`;
+    $('motionState').className = 'state learning';
+  };
+  $('sensitivity').oninput = () => {
+    // Higher sensitivity = lower trigger ratio; release sits 60 % of the way down.
+    const thr = Number($('sensitivity').value);
+    detector.threshold = thr;
+    detector.release = 1 + 0.4 * (thr - 1);
+    $('sensitivityValue').textContent = `${thr.toFixed(1)}× baseline`;
+  };
+  function drawScore() {
+    const c = $('scoreChart'),
+      d = Math.min(devicePixelRatio || 1, 2),
+      W = Math.round(c.clientWidth * d),
+      H = Math.round(c.clientHeight * d);
+    if (c.width !== W || c.height !== H) {
+      c.width = W;
+      c.height = H;
+    }
+    const g = c.getContext('2d');
+    g.fillStyle = '#182126';
+    g.fillRect(0, 0, W, H);
+    if (scores.length < 2) return;
+    const top = Math.max(detector.threshold * 2, ...scores.map((p) => p.s)),
+      y = (v) => H - (v / top) * H,
+      t1 = scores[scores.length - 1].t,
+      x = (t) => W - ((t1 - t) / 60) * W;
+    g.strokeStyle = '#e0605080';
+    g.setLineDash([4 * d, 4 * d]);
+    g.beginPath();
+    g.moveTo(0, y(detector.threshold));
+    g.lineTo(W, y(detector.threshold));
+    g.stroke();
+    g.setLineDash([]);
+    g.strokeStyle = detector.state === 'motion' ? '#ff7a5c' : '#37c964';
+    g.lineWidth = 1.5 * d;
+    g.beginPath();
+    scores.forEach((p, i) => (i ? g.lineTo(x(p.t), y(p.s)) : g.moveTo(x(p.t), y(p.s))));
+    g.stroke();
+    g.fillStyle = '#c0c9cd';
+    g.font = `${11 * d}px Carlito,sans-serif`;
+    g.fillText(`score ${detector.score.toFixed(2)} · threshold ${detector.threshold.toFixed(1)} · last 60 s`, 6 * d, 14 * d);
+  }
   function frame() {
+    drawScore();
     drawHeat();
     drawSnapshot();
     drawMotion();
