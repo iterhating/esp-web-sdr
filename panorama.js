@@ -118,20 +118,40 @@ function findPeaks(values, startHz, resHz, { thresholdDb = 10, minSepHz = 200e3,
   }
   cand.sort((a, b) => values[b] - values[a]);
   const out = [];
+  // A wide signal (an LTE carrier, a Wi-Fi channel) has many local maxima:
+  // each accepted peak claims its whole region above the detection threshold,
+  // and later candidates inside a claimed region are part of that signal.
   for (const i of cand) {
     const f = startHz + i * resHz;
-    if (out.some((p) => Math.abs(p.hz - f) < minSepHz)) continue;
+    if (out.some((p) => (i >= p.lo && i <= p.hi) || Math.abs(p.hz - f) < minSepHz)) continue;
     let lo = i,
       hi = i;
-    const half = values[i] / 4;
-    while (lo > 0 && values[lo - 1] > half) lo--;
-    while (hi < values.length - 1 && values[hi + 1] > half) hi++;
+    while (lo > 0 && values[lo - 1] > thr) lo--;
+    while (hi < values.length - 1 && values[hi + 1] > thr) hi++;
+    // Occupied width: the span holding 99 % of the region's power.
+    let total = 0;
+    for (let k = lo; k <= hi; k++) total += values[k];
+    let acc = 0,
+      a = lo,
+      b = hi;
+    for (let k = lo; k <= hi; k++) if ((acc += values[k]) >= 0.005 * total) {
+      a = k;
+      break;
+    }
+    acc = 0;
+    for (let k = hi; k >= lo; k--) if ((acc += values[k]) >= 0.005 * total) {
+      b = k;
+      break;
+    }
     out.push({
-      hz: f,
+      hz: startHz + ((a + b) / 2) * resHz,
+      peakHz: f,
       db: 10 * Math.log10(values[i]),
       snr: 10 * Math.log10(values[i] / floor),
-      widthHz: (hi - lo + 1) * resHz,
+      widthHz: (b - a + 1) * resHz,
       index: i,
+      lo,
+      hi,
     });
     if (out.length >= max) break;
   }

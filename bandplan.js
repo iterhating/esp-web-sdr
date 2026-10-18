@@ -29,6 +29,22 @@ const CHIP_SPURS = {
   ],
 };
 
+// Broad allocations the S3 can reach (MHz). Cellular downlinks carry steady
+// LTE/NR carriers, the most reliable always-on signals in this range. Region
+// varies; these are the common ITU Region 2 (Americas) bands.
+const ALLOCATIONS = [
+  { lo: 1850, hi: 1915, name: 'PCS uplink (LTE B2/B25, phones)' },
+  { lo: 1930, hi: 1995, name: 'PCS downlink (LTE B2/B25, towers)' },
+  { lo: 2000, hi: 2020, name: 'AWS-4 / satellite uplink' },
+  { lo: 2110, hi: 2200, name: 'AWS downlink (LTE B4/B66, towers)' },
+  { lo: 2305, hi: 2315, name: 'WCS uplink (LTE B30)' },
+  { lo: 2320, hi: 2345, name: 'SDARS satellite radio' },
+  { lo: 2350, hi: 2360, name: 'WCS downlink (LTE B30)' },
+  { lo: 2390, hi: 2450, name: '13 cm amateur band' },
+  { lo: 2400, hi: 2483.5, name: '2.4 GHz ISM' },
+  { lo: 2496, hi: 2690, name: 'BRS/EBS (LTE B41 / NR n41, TDD)' },
+];
+
 // BLE channel index for a 2 MHz-spaced RF channel, or null.
 function bleChannel(mhz) {
   const k = Math.round((mhz - 2402) / 2);
@@ -51,6 +67,8 @@ function describeFrequency(hz, family = '') {
   const bt = Math.round(mhz - 2402);
   if (bt >= 0 && bt <= 78 && Math.abs(mhz - 2402 - bt) <= 0.5) out.push(`BT ch ${bt}`);
   for (const s of CHIP_SPURS[family] || []) if (Math.abs(mhz - s.mhz) <= 0.05) out.push(s.label);
+  // Name the allocation only outside the ISM band, where the channels say more.
+  if (!out.length) for (const a of ALLOCATIONS) if (mhz >= a.lo && mhz <= a.hi) out.push(a.name);
   return out;
 }
 
