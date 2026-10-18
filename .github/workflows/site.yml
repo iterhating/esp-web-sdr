@@ -22,6 +22,7 @@ jobs:
           path: |
             index.html
             flash.html
+            zoom.html
             *.js
             *.css
             espargos-logo.svg

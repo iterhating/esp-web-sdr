@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ESP-WebSDR · Zoom &amp; demodulate</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .tune-row {
+        display: flex;
+        gap: 6px;
+      }
+      .tune-row button {
+        flex: 1;
+        padding: 6px 0;
+      }
+      #frequencyHz {
+        font-variant-numeric: tabular-nums;
+      }
+      .readout {
+        font:
+          12.5px/1.45 Consolas,
+          ui-monospace,
+          monospace;
+        color: #8f9ca2;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 18px;
+        padding: 7px 12px 9px;
+        border-top: 1px solid #293135;
+      }
+      .readout b {
+        color: #e8eef0;
+        font-weight: 600;
+      }
+      #record.active {
+        background: #c94a37;
+        border-color: #c94a37;
+        color: #fff;
+      }
+    </style>
+    <script defer src="serial-transport.js"></script>
+    <script defer src="radio.js"></script>
+    <script defer src="bandplan.js"></script>
+    <script defer src="iqstream.js"></script>
+    <script defer src="dsp.js"></script>
+    <script defer src="zoom.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div>
+          <h1>ESP-WebSDR · Zoom</h1>
+          <span>Continuous I/Q: fine resolution, demodulation, recording · <a href="index.html">burst viewer</a></span>
+        </div>
+      </div>
+      <div class="connection">
+        <span id="light"></span><span id="status">Disconnected</span>
+        <button id="connect">Connect ESP-SDR</button>
+      </div>
+    </header>
+    <main>
+      <aside>
+        <label
+          >Center frequency <span>MHz</span
+          ><input id="frequencyHz" type="number" min="1800" max="2800" step="0.000001" value="2448.000000"
+        /></label>
+        <div class="tune-row">
+          <button data-step="-1000">−1k</button><button data-step="-100">−100</button
+          ><button data-step="100">+100</button><button data-step="1000">+1k</button>
+        </div>
+        <label
+          >Sample rate / span<select id="rate">
+            <option value="250000" selected>250 kS/s</option>
+            <option value="125000">125 kS/s</option>
+            <option value="62500">62.5 kS/s</option>
+            <option value="31250">31.25 kS/s</option>
+            <option value="15625">15.625 kS/s</option>
+          </select></label
+        >
+        <label
+          title="16-bit keeps the full dynamic range but the USB link only carries it gap-free up to 125 kS/s."
+          >Sample format<select id="bits">
+            <option value="8" selected>8 + 8 bits</option>
+            <option value="16">16 + 16 bits</option>
+          </select></label
+        >
+        <label
+          title="Right shift applied on the chip after decimation. Lower = more digital gain for weak signals in 8-bit mode; watch for clipping."
+          >Digital shift <output id="shiftValue">4</output
+          ><input id="shift" type="range" min="0" max="7" step="1" value="4"
+        /></label>
+        <label class="check"><input id="agc" type="checkbox" checked />Hardware AGC</label>
+        <label
+          >Manual gain index <output id="gainValue">54</output
+          ><input id="gain" type="range" min="0" max="82" step="1" value="54" disabled
+        /></label>
+        <div class="divider"></div>
+        <div class="eyebrow">Spectrum</div>
+        <label
+          >FFT size<select id="fft">
+            <option>1024</option>
+            <option>4096</option>
+            <option selected>16384</option>
+            <option>65536</option>
+          </select></label
+        >
+        <label
+          >Averaging<select id="average">
+            <option value="0">Off</option>
+            <option value="0.5" selected>Short</option>
+            <option value="0.8">Medium</option>
+            <option value="0.95">Long</option>
+          </select></label
+        >
+        <label
+          >Floor <output id="floorValue">−110 dBFS</output
+          ><input id="floor" type="range" min="-160" max="-40" value="-110" /></label
+        ><label
+          >Range <output id="rangeValue">80 dB</output
+          ><input id="range" type="range" min="20" max="140" value="80" /></label
+        ><label class="check"><input id="hold" type="checkbox" />Max hold</label
+        ><label class="check"><input id="bandplan" type="checkbox" checked />Band plan</label>
+        <div class="divider"></div>
+        <div class="eyebrow">Demodulator</div>
+        <label
+          >Mode<select id="mode">
+            <option value="off" selected>Off</option>
+            <option>AM</option>
+            <option>NFM</option>
+            <option>WFM</option>
+            <option>USB</option>
+            <option>LSB</option>
+            <option>CW</option>
+          </select></label
+        >
+        <label>Channel bandwidth <span>Hz</span><input id="bandwidth" type="number" min="100" max="240000" step="100" value="12500" /></label>
+        <label
+          >Squelch <output id="squelchValue">off</output
+          ><input id="squelch" type="range" min="-140" max="-20" value="-140"
+        /></label>
+        <label
+          >Volume <output id="volumeValue">50 %</output><input id="volume" type="range" min="0" max="100" value="50"
+        /></label>
+        <p class="note">Click the spectrum to place the channel; double-click to recentre there.</p>
+        <div class="divider"></div>
+        <div class="actions">
+          <button id="pause" disabled>Pause</button><button id="record" disabled>Record I/Q</button>
+        </div>
+        <p id="recordNote" class="note"></p>
+      </aside>
+      <section class="display">
+        <div id="error" role="alert" hidden><span id="errorText"></span></div>
+        <div class="chart">
+          <div class="charthead"><span>Power spectrum</span><span id="cursor"></span></div>
+          <canvas id="spectrum" aria-label="Power spectrum: wheel to zoom, drag to pan"></canvas>
+          <div id="readout" class="readout"></div>
+        </div>
+        <div class="chart waterfall">
+          <div class="charthead"><span>Waterfall</span><span id="scale"></span></div>
+          <canvas id="waterfall" aria-label="Waterfall"></canvas>
+          <div id="empty">
+            <div class="empty-icon">▥</div>
+            <h2>Connect ESP-SDR to start</h2>
+            <p>Needs an ESP32-S3 on its native USB port. Close the burst viewer first: one page at a time can hold the port.</p>
+          </div>
+        </div>
+        <footer>
+          <div><b id="fps">—</b> FFT/s</div>
+          <div><b id="delivered">—</b> kS/s delivered</div>
+          <div><b id="lost">—</b> samples lost</div>
+          <div><b id="crc">—</b> CRC errors</div>
+          <div><b id="level">—</b> channel dBFS</div>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>
