@@ -225,8 +225,9 @@ window.addEventListener('mouseup', () => {
 });
 // ---- frequency axis: nice 1-2-5 ticks, shared with the spectrum grid -------
 function axisTicks(c, W) {
-  const span = (view.b - view.a) * c.rate,
-    f0 = c.frequency * 1e6 + (view.a - 0.5) * c.rate,
+  const k = frequencyScale(),
+    span = (view.b - view.a) * c.rate * k,
+    f0 = (c.frequency * 1e6 + (view.a - 0.5) * c.rate) * k,
     f1 = f0 + span;
   const raw = span / Math.max(2, W / 110),
     p = 10 ** Math.floor(Math.log10(raw)),
@@ -241,7 +242,7 @@ function axisTicks(c, W) {
     if (Math.abs(r / step - Math.round(r / step)) < 1e-6) major.push(r);
     else minors.push(r);
   }
-  return { step, major, minors, x };
+  return { step, major, minors, x, f0, f1 };
 }
 function drawAxis(c) {
   const el = $('axisCanvas');
@@ -285,7 +286,7 @@ function drawAxis(c) {
     g.fillText(s, Math.max(2 * d, Math.min(W - tw - 2 * d, t.x(f) - tw / 2)), H - 3 * d);
   }
   const mark = (fMHz, col) => {
-    const x = t.x(fMHz * 1e6);
+    const x = t.x(fMHz * 1e6 * frequencyScale());
     if (x < 0 || x > W) return;
     g.fillStyle = col;
     g.beginPath();
@@ -312,12 +313,49 @@ function loFrequency() {
   for (const f of [tuneFrequency - o, tuneFrequency + o]) if (radio.validFrequency(f)) return f;
   return tuneFrequency;
 }
+function frequencyScale() {
+  return ppmScale($('ppm').value);
+}
+// Keep the analog filter's -3 dB edge just inside Nyquist while following the rate.
+function followRate() {
+  if (!$('bandwidthAuto').checked || !radio.bandwidthRange) return;
+  analogBandwidth = matchedBandwidth(Number($('rate').value), radio.bandwidthRange);
+  if (analogBandwidth) $('bandwidth').value = analogBandwidth;
+}
 $('dcMode').onchange = () => {
   try {
     localStorage.setItem('espSdrDcMode', $('dcMode').value);
   } catch (e) {}
   labels();
   draw();
+};
+// ---- calibration: crystal ppm, band plan overlay, rate-matched filter -------
+try {
+  const v = localStorage.getItem('espSdrPpm');
+  if (v !== null && Number.isFinite(Number(v))) $('ppm').value = v;
+  $('bandplan').checked = localStorage.getItem('espSdrBandPlan') !== '0';
+} catch (e) {}
+$('ppm').onchange = () => {
+  if (!$('ppm').checkValidity()) {
+    $('ppm').reportValidity();
+    return;
+  }
+  try {
+    localStorage.setItem('espSdrPpm', $('ppm').value);
+  } catch (e) {}
+  labels();
+  draw();
+};
+$('bandplan').onchange = () => {
+  try {
+    localStorage.setItem('espSdrBandPlan', $('bandplan').checked ? '1' : '0');
+  } catch (e) {}
+  draw();
+};
+$('bandwidthAuto').onchange = () => {
+  followRate();
+  state();
+  clear();
 };
 
 async function api(path, body) {
@@ -390,8 +428,8 @@ function fmtHz(hz) {
 function measBar(c) {
   const spec = connected && spectrumMode,
     n = spec ? specConfig().fft : c.fft,
-    center = c.frequency * 1e6,
-    span = c.rate;
+    center = c.frequency * 1e6 * frequencyScale(),
+    span = c.rate * frequencyScale();
   // Hann window: 3 dB bandwidth 1.44 bins
   const rbw = (1.44 * c.rate) / n,
     top = Number($('floor').value) + Number($('range').value),
@@ -470,8 +508,9 @@ function drawFrequencyGrid(w, h, d) {
     }
     sc.stroke();
   }
+  if ($('bandplan').checked) drawBandPlan(sc, t.x, t.f0, t.f1, w, h, d, radio.family);
   if (tuneFrequency !== c.frequency) {
-    const x = t.x(tuneFrequency * 1e6);
+    const x = t.x(tuneFrequency * 1e6 * frequencyScale());
     sc.save();
     sc.setLineDash([4 * d, 4 * d]);
     sc.strokeStyle = '#37c96490';
@@ -558,7 +597,7 @@ function render(f) {
   previous = now;
   $('throughput').textContent = f.delivered_ksps.toFixed(1);
   $('latency').textContent = f.elapsed_ms.toFixed(1);
-  $('peak').textContent = (f.peak_hz / 1e6).toFixed(4);
+  $('peak').textContent = ((f.peak_hz * frequencyScale()) / 1e6).toFixed(4);
   $('crc').textContent =
     `CRC OK · #${f.sequence}${f.dropped_captures ? ` · ${f.dropped_captures} dropped · ${f.samples} samples` : ''}`;
 }
@@ -854,12 +893,14 @@ function bandwidthChanged() {
     return;
   }
   analogBandwidth = Number($('bandwidth').value);
+  $('bandwidthAuto').checked = false;
   state();
   clear();
 }
 $('bandwidthOpen').onclick = () => {
   if ($('bandwidthOpen').disabled || analogBandwidth === 0) return;
   $('bandwidth').value = analogBandwidth;
+  $('bandwidthAuto').checked = false;
   analogBandwidth = 0;
   state();
   clear();
@@ -1089,6 +1130,8 @@ $('connect').onclick = async (ev) => {
       checkFirmwareUpdate();
       spectrumMode = radio.canStreamSpectrum;
       applyRadioProfile();
+      followRate();
+      state();
       paused = false;
       previous = 0;
       latest = null;
@@ -1115,6 +1158,7 @@ $('pause').onclick = () => {
 $('clear').onclick = clear;
 for (const id of ['rate', 'bits', 'fft'])
   $(id).onchange = () => {
+    if (id === 'rate') followRate();
     state();
     labels();
   };
@@ -1163,9 +1207,11 @@ $('hold').onchange = () => {
 spec.onmousemove = (e) => {
   if (!latest) return;
   const x = viewFrac(e.clientX, spec),
-    i = Math.max(0, Math.min(latest.fft - 1, Math.floor(x * latest.fft)));
+    i = Math.max(0, Math.min(latest.fft - 1, Math.floor(x * latest.fft))),
+    hz = (latest.frequency * 1e6 + (x - 0.5) * latest.rate) * frequencyScale(),
+    names = $('bandplan').checked ? describeFrequency(hz, radio.family) : [];
   $('cursor').textContent =
-    `${((latest.frequency * 1e6 + (x - 0.5) * latest.rate) / 1e6).toFixed(5)} MHz · ${latest.spectrum[i].toFixed(1)} dBFS`;
+    `${(hz / 1e6).toFixed(5)} MHz · ${latest.spectrum[i].toFixed(1)} dBFS${names.length ? ' · ' + names.join(' · ') : ''}`;
 };
 function queueTune(e, el) {
   if (suppressClick) {

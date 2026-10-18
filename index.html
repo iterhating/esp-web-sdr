@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="style.css" />
     <script defer src="serial-transport.js"></script>
     <script defer src="radio.js"></script>
+    <script defer src="bandplan.js"></script>
     <script defer src="app.js"></script>
   </head>
   <body>
@@ -105,6 +106,11 @@
             >Filter bandwidth <span>MHz</span
             ><input id="bandwidth" type="number" min="13" max="54" step="1" value="20" disabled
           /></label>
+          <label
+            class="check"
+            title="Pick the filter whose −3 dB edge sits just inside the sample rate's Nyquist band, so out-of-span signals do not alias in."
+            ><input id="bandwidthAuto" type="checkbox" checked />Match sample rate</label
+          >
         </div>
         <label
           >Sample rate / nominal span<select id="rate">
@@ -197,7 +203,16 @@
             <option value="0.9">High</option>
           </select></label
         ><label class="check"><input id="hold" type="checkbox" />Max hold</label
-        ><label class="check"><input id="autoscale" type="checkbox" />Auto scale</label>
+        ><label class="check"><input id="autoscale" type="checkbox" />Auto scale</label
+        ><label
+          class="check"
+          title="Wi-Fi channels, BLE advertising channels and this chip's known internal spurs; the cursor names what it is over."
+          ><input id="bandplan" type="checkbox" checked />Band plan</label
+        ><label
+          title="Receiver crystal error. Positive if the board's crystal runs fast; frequencies are shown corrected."
+          >Crystal correction <span>ppm</span
+          ><input id="ppm" type="number" min="-100" max="100" step="0.1" value="0"
+        /></label>
         <div class="actions"><button id="pause" disabled>Pause</button><button id="clear">Clear</button></div>
         <details id="gpioControls" hidden>
           <summary>GPIO</summary>

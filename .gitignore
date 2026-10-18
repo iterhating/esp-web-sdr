@@ -22,3 +22,10 @@ venv/
 Thumbs.db
 *.log
 
+
+# Calibration captures stay local: raw I/Q recordings and their results can
+# hold nearby device addresses, decoded beacons and RF-environment surveys.
+# Only the tools and their documentation are tracked.
+/calibration/*
+!/calibration/*.py
+!/calibration/README.md
