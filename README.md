@@ -19,6 +19,21 @@ Parts of this code are AI-generated. We put a lot of manual effort into
 [pyespargos](https://github.com/ESPARGOS/pyespargos) and the ESPARGOS One
 firmware, but haven't reviewed every line of ESP-WebSDR by hand.
 
+## This fork: zoom, demodulation, CSI and firmware modes
+
+| Page | Firmware profile | What it does |
+| --- | --- | --- |
+| `index.html` | ESP-SDR (any chip) | Burst spectrum and waterfall, plus a band-plan overlay (Wi-Fi, BLE advertising, known chip spurs), crystal ppm correction and a rate-matched analog filter |
+| `zoom.html` | ESP-SDR on an ESP32-S3 | Continuous I/Q (15.6–250 kS/s): FFTs to 65536 points (0.48 Hz RBW), hertz tuning, AM/NFM/WFM/USB/LSB/CW audio, SigMF recording |
+| `csi.html` | `esp32s3-csi` | Wi-Fi CSI: amplitude heatmap, sanitized phase, sources heard, motion index and an amplitude-fluctuation (Doppler-like) spectrum; a second board can run as illuminator |
+
+Switch a board between modes with the firmware installer: the S3 profiles are
+the stock receiver (`esp32s3`), the receiver with the zhouzhiwen2000 fork's
+experimental transmit commands (`esp32s3-tx`, unverified on air) and the CSI
+sensor (`esp32s3-csi`, source in `csi-firmware/`). `tools/add_firmware_profile.py`
+adds any ESP-IDF build as a further profile. Receiver calibration tools and
+measurements are in `calibration/`.
+
 ## Get started
 
 You need a browser with WebSerial or WebUSB: Chrome, Edge or

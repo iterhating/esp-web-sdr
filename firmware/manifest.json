@@ -507,6 +507,97 @@
       ],
       "application": "soapysdr",
       "build_date": "2026-10-17"
+    },
+    "esp32s3-csi": {
+      "revision": "esp32s3-csi",
+      "label": "ESP32-S3 \u00b7 Wi-Fi CSI sensor (receiver / illuminator)",
+      "target": "esp32s3",
+      "chip": "ESP32-S3",
+      "version": "csi-firmware-1",
+      "flash_size": "2MB",
+      "flash_size_policy": "minimum",
+      "flash_settings": {
+        "flash_mode": "dio",
+        "flash_size": "2MB",
+        "flash_freq": "80m"
+      },
+      "esptool_args": {
+        "after": "hard-reset",
+        "before": "default-reset",
+        "stub": true,
+        "chip": "esp32s3"
+      },
+      "parts": [
+        {
+          "name": "0-bootloader.bin",
+          "offset": 0,
+          "size": 18816,
+          "sha256": "a89688bd118c1995e00c16042700a6fd221fd482d56ef217d5b6ac066ad42ff4",
+          "md5": "c5e5ea7f12edd6d54fa6a2b0866f132f"
+        },
+        {
+          "name": "1-partition-table.bin",
+          "offset": 32768,
+          "size": 3072,
+          "sha256": "7f00b6c042a89b15b0cac534f82ed988caf29278ff5700b0c511eb1b5bb7c820",
+          "md5": "5d61d196adc3dba01928f264eb169be7"
+        },
+        {
+          "name": "2-esp_csi_sensor.bin",
+          "offset": 65536,
+          "size": 657296,
+          "sha256": "7cea0babd3a2a4d8a947195189328d2601baa3b8ce6f905c6defa17f556c9440",
+          "md5": "cb90b72bfe4522c9969d340fc2783c4d"
+        }
+      ],
+      "build_date": "2026-10-18",
+      "git_revision": "csi-firmware-1",
+      "application": "csi"
+    },
+    "esp32s3-tx": {
+      "revision": "esp32s3-tx",
+      "label": "ESP32-S3 \u00b7 ESP-SDR with experimental transmit (zhouzhiwen2000 fork)",
+      "target": "esp32s3",
+      "chip": "ESP32-S3",
+      "version": "6517fb8",
+      "flash_size": "2MB",
+      "flash_size_policy": "minimum",
+      "flash_settings": {
+        "flash_mode": "dio",
+        "flash_size": "2MB",
+        "flash_freq": "80m"
+      },
+      "esptool_args": {
+        "after": "hard-reset",
+        "before": "default-reset",
+        "stub": true,
+        "chip": "esp32s3"
+      },
+      "parts": [
+        {
+          "name": "0-bootloader.bin",
+          "offset": 0,
+          "size": 20896,
+          "sha256": "11bbff8743c2196e508e682c63b6555f57921f6801ab29f239bb275a3e64798a",
+          "md5": "bc270131296c5029d060882e1a3fc2cd"
+        },
+        {
+          "name": "1-partition-table.bin",
+          "offset": 32768,
+          "size": 3072,
+          "sha256": "7f00b6c042a89b15b0cac534f82ed988caf29278ff5700b0c511eb1b5bb7c820",
+          "md5": "5d61d196adc3dba01928f264eb169be7"
+        },
+        {
+          "name": "2-esp_sdr.bin",
+          "offset": 65536,
+          "size": 657184,
+          "sha256": "039afb2fa7926c0270296dca0dadb43a3f5f22427ced4d1ba11dfce7bcd06709",
+          "md5": "5b78547caddccf9431150c6efa132c56"
+        }
+      ],
+      "build_date": "2026-10-18",
+      "git_revision": "6517fb8"
     }
   }
 }

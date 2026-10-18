@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ESP-WebSDR · Wi-Fi CSI</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .grid canvas {
+        width: 100%;
+        height: 220px;
+        display: block;
+      }
+      #heat {
+        height: 300px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font:
+          12.5px Consolas,
+          ui-monospace,
+          monospace;
+      }
+      td {
+        padding: 3px 6px;
+        border-bottom: 1px solid #293135;
+        cursor: pointer;
+      }
+      tr.sel td {
+        color: #37c964;
+      }
+      @media (max-width: 850px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+    <script defer src="serial-transport.js"></script>
+    <script defer src="radio.js"></script>
+    <script defer src="csi.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div>
+          <h1>ESP-WebSDR · CSI</h1>
+          <span
+            >Wi-Fi channel state information for sensing ·
+            <a href="index.html">burst viewer</a> · <a href="zoom.html">zoom</a> ·
+            <a href="flash.html" target="_blank" rel="noopener">switch firmware</a></span
+          >
+        </div>
+      </div>
+      <div class="connection">
+        <span id="light"></span><span id="status">Disconnected</span>
+        <button id="connect">Connect CSI sensor</button>
+      </div>
+    </header>
+    <main>
+      <aside>
+        <label
+          >Wi-Fi channel<select id="channel">
+            <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+            <option selected>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
+            <option>11</option><option>12</option><option>13</option>
+          </select></label
+        >
+        <label
+          >Role<select id="role">
+            <option value="rx" selected>Receiver (CSI)</option>
+            <option value="tx">Illuminator (transmit)</option>
+          </select></label
+        >
+        <label id="rxRow" title="Only report CSI from this transmitter, e.g. an illuminator board. Empty: every OFDM frame heard."
+          >Source MAC filter<input id="filter" type="text" placeholder="aa:bb:cc:dd:ee:ff (optional)"
+        /></label>
+        <label id="txRow" hidden>Packets per second<input id="txHz" type="number" min="1" max="1000" value="100" /></label>
+        <div class="actions"><button id="start">Start</button><button id="stop">Stop</button></div>
+        <p class="note">
+          This board: <b id="selfMac">—</b>. For sensing, run a second board as illuminator on the same channel and
+          filter the receiver to its MAC; people moving near the link modulate the CSI.
+        </p>
+        <div class="divider"></div>
+        <div class="eyebrow">Sources heard (click to view)</div>
+        <table>
+          <tbody id="sources"></tbody>
+        </table>
+        <p class="note">Motion index (last 50 packets): <b id="motionValue">—</b></p>
+      </aside>
+      <section class="display">
+        <div id="error" role="alert" hidden><span id="errorText"></span></div>
+        <div class="chart">
+          <div class="charthead"><span>Amplitude heatmap (LLTF)</span></div>
+          <canvas id="heat"></canvas>
+        </div>
+        <div class="grid">
+          <div class="chart">
+            <div class="charthead"><span>Latest packet</span></div>
+            <canvas id="snapshot"></canvas>
+          </div>
+          <div class="chart">
+            <div class="charthead"><span>Motion</span></div>
+            <canvas id="motion"></canvas>
+          </div>
+        </div>
+        <div class="chart">
+          <div class="charthead"><span>Amplitude fluctuation spectrum (Doppler-like)</span></div>
+          <canvas id="doppler" style="height: 200px"></canvas>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,5 @@
+{
+  "profile": "esp32s3-csi",
+  "version": "csi-firmware-1",
+  "source": "csi-firmware/ in this repository"
+}

@@ -86,15 +86,17 @@ export function firmwareDate(variant) {
 // Keep post-install guidance tied to the selected application, not the chip:
 // the S31 has both a serial viewer profile and a Soapy streaming profile.
 export function applicationGuidance(variant) {
-  return variant?.application === 'soapysdr'
-    ? 'Use SoapyESPSDR over Ethernet or native high-speed USB. Open the device IP address in a browser for receiver controls. This profile does not connect to the ESP-WebSDR serial viewer.'
-    : 'Open ESP-WebSDR and connect to the device.';
+  if (variant?.application === 'soapysdr')
+    return 'Use SoapyESPSDR over Ethernet or native high-speed USB. Open the device IP address in a browser for receiver controls. This profile does not connect to the ESP-WebSDR serial viewer.';
+  if (variant?.application === 'csi')
+    return 'Open the CSI page (csi.html) and connect to the device. Flash an ESP-SDR profile to return to I/Q reception.';
+  return 'Open ESP-WebSDR and connect to the device.';
 }
 
 export function flashingBaudRate(variant) {
-  // Streaming uses Ethernet/USB for samples; its recovery UART need not meet
-  // the serial viewer's 2 Mbaud requirement.
-  return variant?.application === 'soapysdr' ? 115200 : 2000000;
+  // Streaming uses Ethernet/USB for samples and CSI runs over native USB; their
+  // UARTs need not meet the serial viewer's 2 Mbaud requirement.
+  return ['soapysdr', 'csi'].includes(variant?.application) ? 115200 : 2000000;
 }
 
 // C2 firmware must match the physical crystal, independently of flash size.

@@ -29,3 +29,10 @@ Thumbs.db
 /calibration/*
 !/calibration/*.py
 !/calibration/README.md
+
+# Firmware build output (binaries ship through firmware/ and its manifest).
+/csi-firmware/build/
+/csi-firmware/sdkconfig
+/csi-firmware/sdkconfig.old
+/csi-firmware/managed_components/
+/csi-firmware/dependencies.lock
