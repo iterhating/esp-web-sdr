@@ -21,9 +21,29 @@ let raw = null,
 const q = new URLSearchParams(location.search);
 if (q.get('f')) $('target').value = Number(q.get('f')).toFixed(6);
 
+async function reconnectGranted() {
+  const ports = (await SerialConnection.getPorts()).filter((p) => (p.getInfo?.() || {}).usbVendorId === 0x303a);
+  if (ports.length) await connect(ports[0]);
+}
 function error(e) {
+  const el = $('error');
+  if (e && e.flashProfile && window.firmwarePrompt) {
+    firmwarePrompt(el, {
+      profile: e.flashProfile,
+      label: e.flashLabel,
+      message: e.message || String(e),
+      beforeFlash: async () => {
+        await halt();
+        connected = false;
+        await radio.run(() => radio.close()).catch(() => {});
+      },
+      afterFlash: reconnectGranted,
+    });
+    return;
+  }
+  el.innerHTML = '<span id="errorText"></span>';
   $('errorText').textContent = e?.message || e || '';
-  $('error').hidden = !e;
+  el.hidden = !e;
 }
 function ui() {
   $('light').classList.toggle('on', connected);
@@ -38,7 +58,10 @@ async function connect(port = null) {
     await radio.connect({ port });
     if (radio.family !== 'S3') throw Error('Doppler needs the continuous I/Q stream of an ESP32-S3.');
     if (!radio.hasStream)
-      throw Error('This firmware cannot stream continuous I/Q. Flash the stock "ESP32-S3" profile (the transmit profile does not support Doppler).');
+      throw Object.assign(
+        Error('This board has firmware without the continuous I/Q stream (likely the transmit profile), which Doppler needs.'),
+        { flashProfile: 'esp32s3', flashLabel: 'stock ESP32-S3 receiver' },
+      );
     connected = true;
   } catch (e) {
     connected = false;

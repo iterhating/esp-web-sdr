@@ -363,9 +363,28 @@ async function streamLoop() {
 }
 
 // ---- connection -------------------------------------------------------------
+async function reconnectGranted() {
+  const ports = (await SerialConnection.getPorts()).filter((p) => (p.getInfo?.() || {}).usbVendorId === 0x303a);
+  if (ports.length) await connect(ports[0]);
+}
 function error(e) {
+  const el = $('error');
+  if (e && e.flashProfile && window.firmwarePrompt) {
+    firmwarePrompt(el, {
+      profile: e.flashProfile,
+      label: e.flashLabel,
+      message: e.message || String(e),
+      beforeFlash: async () => {
+        connected = false;
+        await radio.run(() => radio.close()).catch(() => {});
+      },
+      afterFlash: reconnectGranted,
+    });
+    return;
+  }
+  el.innerHTML = '<span id="errorText"></span>';
   $('errorText').textContent = e?.message || e || '';
-  $('error').hidden = !e;
+  el.hidden = !e;
 }
 function ui() {
   $('light').classList.toggle('on', connected);
@@ -386,7 +405,10 @@ async function connect(port = null) {
     if (radio.family !== 'S3')
       throw Error(`Continuous I/Q needs an ESP32-S3 on native USB; this board is ${radio.deviceName || 'unknown'}.`);
     if (!radio.hasStream)
-      throw Error('This firmware cannot stream continuous I/Q. Flash the stock "ESP32-S3" profile (the transmit profile does not support zoom or Doppler).');
+      throw Object.assign(
+        Error('This board has firmware without the continuous I/Q stream (likely the transmit profile), which zoom needs.'),
+        { flashProfile: 'esp32s3', flashLabel: 'stock ESP32-S3 receiver' },
+      );
     connected = true;
     paused = false;
     configureDemod();

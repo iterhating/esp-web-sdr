@@ -176,9 +176,25 @@ if (typeof document !== 'undefined') {
   let audioCtx = null;
 
   const status = (s) => ($('status').textContent = s);
+  async function reconnectGranted() {
+    const ports = (await SerialConnection.getPorts()).filter((p) => (p.getInfo?.() || {}).usbVendorId === 0x303a);
+    if (ports.length) await connect(ports[0]);
+  }
   const error = (e) => {
+    const el = $('error');
+    if (e && e.flashProfile && window.firmwarePrompt) {
+      window.firmwarePrompt(el, {
+        profile: e.flashProfile,
+        label: e.flashLabel,
+        message: e.message || String(e),
+        beforeFlash: async () => disconnect(),
+        afterFlash: reconnectGranted,
+      });
+      return;
+    }
+    el.innerHTML = '<span id="errorText"></span>';
     $('errorText').textContent = e?.message || e || '';
-    $('error').hidden = !e;
+    el.hidden = !e;
   };
   async function send(cmd) {
     if (!writer) return;
@@ -247,7 +263,12 @@ if (typeof document !== 'undefined') {
     if (line.startsWith('ERR')) return error(`Firmware: ${line}`);
     if (line === 'OK') return;
     if (line.startsWith('S3SDR') || line.startsWith('DATA ')) {
-      error('This board runs the SDR firmware. Flash the CSI profile from the firmware installer.');
+      error(
+        Object.assign(Error('This board is running the SDR receiver firmware, not the CSI sensor firmware.'), {
+          flashProfile: 'esp32s3-csi',
+          flashLabel: 'ESP32-S3 CSI sensor',
+        }),
+      );
       return;
     }
     const rec = parseCsiLine(line);

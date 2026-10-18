@@ -19,9 +19,28 @@ const spec = $('spectrum'),
   sc = spec.getContext('2d'),
   wc = water.getContext('2d');
 
+async function reconnectGranted() {
+  const ports = (await SerialConnection.getPorts()).filter((p) => (p.getInfo?.() || {}).usbVendorId === 0x303a);
+  if (ports.length) await connect(ports[0]);
+}
 function error(e) {
+  const el = $('error');
+  if (e && e.flashProfile && window.firmwarePrompt) {
+    firmwarePrompt(el, {
+      profile: e.flashProfile,
+      label: e.flashLabel,
+      message: e.message || String(e),
+      beforeFlash: async () => {
+        connected = false;
+        await radio.run(() => radio.close()).catch(() => {});
+      },
+      afterFlash: reconnectGranted,
+    });
+    return;
+  }
+  el.innerHTML = '<span id="errorText"></span>';
   $('errorText').textContent = e?.message || e || '';
-  $('error').hidden = !e;
+  el.hidden = !e;
 }
 function ui() {
   $('light').classList.toggle('on', connected);
@@ -45,6 +64,13 @@ async function connect(port = null) {
   } catch (e) {
     connected = false;
     await radio.run(() => radio.close()).catch(() => {});
+    // A board that is present but speaks no SDR protocol is usually running CSI
+    // or another firmware; offer to install the receiver.
+    if (!e.flashProfile) {
+      e.flashProfile = 'esp32s3';
+      e.flashLabel = 'stock ESP32-S3 receiver';
+      e.message = `${e.message || e} If this board has CSI or transmit firmware, install the receiver:`;
+    }
     error(e);
   }
   ui();

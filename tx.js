@@ -9,9 +9,28 @@ let connected = false,
   elapsedTimer = null,
   waveform = null;
 
+async function reconnectGranted() {
+  const ports = (await SerialConnection.getPorts()).filter((p) => (p.getInfo?.() || {}).usbVendorId === 0x303a);
+  if (ports.length) await connect(ports[0]);
+}
 function error(e) {
+  const el = $('error');
+  if (e && e.flashProfile && window.firmwarePrompt) {
+    firmwarePrompt(el, {
+      profile: e.flashProfile,
+      label: e.flashLabel,
+      message: e.message || String(e),
+      beforeFlash: async () => {
+        connected = false;
+        await radio.run(() => radio.close()).catch(() => {});
+      },
+      afterFlash: reconnectGranted,
+    });
+    return;
+  }
+  el.innerHTML = '<span id="errorText"></span>';
   $('errorText').textContent = e?.message || e || '';
-  $('error').hidden = !e;
+  el.hidden = !e;
 }
 function ui() {
   $('light').classList.toggle('on', connected);
@@ -27,7 +46,10 @@ async function connect(port = null) {
   try {
     await radio.connect({ port });
     if (!radio.hasCw && !radio.hasReplay)
-      throw Error(`This board (${radio.deviceName}) has no transmit firmware. Flash "ESP32-S3 · experimental transmit" first.`);
+      throw Object.assign(
+        Error(`This board (${radio.deviceName}) is running receive-only firmware; transmit needs the TX profile.`),
+        { flashProfile: 'esp32s3-tx', flashLabel: 'ESP32-S3 experimental transmit' },
+      );
     connected = true;
   } catch (e) {
     connected = false;
